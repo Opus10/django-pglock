@@ -22,13 +22,13 @@ PGLock
   which includes the SQL query.
 * **mode**: The lock mode.
 * **granted**: A boolean indicating if the lock has been granted or is still waiting to be acquired.
-* **wait_duration**: How long the lock has been waiting to be acquired.
+* **wait_duration**: How long the lock has been waiting to be acquired. Only available in Postgres 14 and up.
 * **rel_kind**: The type of relation for the lock, such as "TABLE" or "INDEX".
 * **rel_name**: The name of the relation, such as the table name.
 
 See `PGLock` for a list of all attributes and possible options for fields.
 
-For example, this query will show all locks and associated relations that have been blocked for over five seconds. It will
+For example, this query will show all locks that are blocked. It will
 also show which query is trying to acquire the locks.
 
 .. code-block:: python
@@ -37,8 +37,8 @@ also show which query is trying to acquire the locks.
     from pglock.models import PGLock
 
     PGLock.objects.filter(
-        wait_duration__gt=timedelta(seconds=5)
-    ).values("rel_kind", "rel_name", "wait_duration", "activity__query")
+        granted=False
+    ).values("rel_kind", "rel_name", "activity__duration", "activity__query")
 
 There are some special queryset methods worth noting:
 

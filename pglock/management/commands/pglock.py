@@ -141,7 +141,13 @@ class Command(BaseCommand):
                 )
             )
         else:
-            locks = locks.order_by(F("wait_duration").desc(nulls_last=True))
+            locks = locks.order_by(
+                "granted",
+                # Only PG14 and up has a non-null wait_duration. Sort by this first, but
+                # use activity__duration as a backup if wait_duration is null
+                F("wait_duration").desc(nulls_last=True),
+                F("activity__duration").desc(nulls_last=True),
+            )
 
             if not cfg.get("pids") and cfg.get("limit"):
                 locks = locks[: cfg["limit"]]

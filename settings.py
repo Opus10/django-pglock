@@ -29,7 +29,7 @@ PGLOCK_CONFIGS = {
     "special-fields": {"attributes": ["activity_id"]},
     "bad-pid": {"filters": ["activity_id=-1"]},
     "kill-long-blocking": {
-        "filters": ["wait_duration__gt=1 minute"],
+        "filters": ["activity__duration__gt=1 minute"],
         "yes": True,
         "blocking": True,
         "terminate": True,

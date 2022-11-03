@@ -8,7 +8,8 @@ def attributes():
         "PGLOCK_ATTRIBUTES",
         [
             "activity_id",
-            "wait_duration",
+            "activity__duration",
+            "granted",
             "mode",
             "rel_kind",
             "rel_name",

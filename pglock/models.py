@@ -1,6 +1,6 @@
 from django.apps import apps
 from django.conf import settings
-from django.db import DEFAULT_DB_ALIAS, models
+from django.db import connections, DEFAULT_DB_ALIAS, models
 import pgactivity
 import pgactivity.models
 
@@ -17,6 +17,9 @@ class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
     def get_ctes(self):
         ctes = super().get_ctes()
 
+        with connections[self.using].cursor() as cursor:
+            pg_version = str(cursor.connection.server_version).rjust(6, "0")
+
         if self.query.relations:
             models = [
                 apps.get_model(model) if isinstance(model, str) else model
@@ -29,6 +32,12 @@ class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
             )
         else:
             rel_name_clause = ""
+
+        if int(pg_version[:2]) >= 14:
+            # Waitstart is available in pg 14 and up
+            wait_start_clause = "waitstart AS wait_start, NOW() - waitstart AS wait_duration"
+        else:  # pragma: no cover
+            wait_start_clause = "NULL AS wait_start, NULL AS wait_duration"
 
         lock_cte = rf"""
             _pglock_lock_cte AS (
@@ -60,8 +69,7 @@ class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
                     UPPER(locktype) as type,
                     pg_class.relname as rel_name,
                     granted,
-                    waitstart AS wait_start,
-                    NOW() - waitstart AS wait_duration
+                    {wait_start_clause}
                 FROM pg_locks
                 JOIN pg_database ON pg_database.oid = pg_locks.database
                 JOIN pg_class ON pg_class.oid = pg_locks.relation
@@ -190,8 +198,10 @@ class PGLock(BasePGLock):
             SHARE, SHARE_ROW_EXCLUSIVE, EXCLUSIVE, ACCESS_EXCLUSIVE.
         granted (models.BooleanField): ``True`` if the lock has been granted,
             ``False`` if the lock is blocked by another.
-        wait_start (models.DateTimeField): When the lock started waiting.
+        wait_start (models.DateTimeField): When the lock started waiting. Only
+            available in Postgres 14 and up.
         wait_duration (models.DurationField): How long the lock has been blocked.
+            Only available in Postgres 14 and up
         rel_kind (models.CharField): The kind of relation being locked. One of
             TABLE, INDEX, SEQUENCE, TOAST, VIEW, MATERIALIZED_VIEW,
             COMPOSITE_TYPE, FOREIGN_TABLE, PARTITIONED_TABLE, or

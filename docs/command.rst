@@ -13,22 +13,22 @@ Fields are separated by ``|`` and are configured with
 ``settings.PGLOCK_ATTRIBUTES``, which defaults to the following:
 
 1. **activity_id**: The process ID that's using the lock.
-2. **wait_duration**: The time the lock has been waiting, or ``None`` if it's
-   acquired.
-3. **mode**: The mode of the lock, such as "ACCESS_EXCLUSIVE".
-4. **rel_kind**: The kind of relationship, such as "TABLE".
-5. **rel_name**: The name of the relationship locked, such as the table name.
-6. **activity__context**: Application context tracked by
+2. **activity__duration**: The duration of the query.
+3. **granted**: ``True`` if the lock has been granted or ``False`` if the query is waiting for the lock.
+4. **mode**: The mode of the lock, such as "ACCESS_EXCLUSIVE".
+5. **rel_kind**: The kind of relationship, such as "TABLE".
+6. **rel_name**: The name of the relationship locked, such as the table name.
+7. **activity__context**: Application context tracked by
    `django-pgactivity <https://django-pgactivity.readthedocs.io>`__.
-7. **activity__query**: The SQL of the query.
+8. **activity__query**: The SQL of the query.
 
 Output looks like the following::
 
-    76362 | 21:02:35 | ACCESS_EXCLUSIVE | TABLE | auth_user | None | lock table auth_user in access
-    246 | None | ACCESS_SHARE | INDEX | pg_class_tblspc_relfilenode_index | None | WITH _pgactivity
-    246 | None | ACCESS_SHARE | INDEX | pg_class_relname_nsp_index | None | WITH _pgactivity_activi
-    246 | None | ACCESS_SHARE | INDEX | pg_class_oid_index | None | WITH _pgactivity_activity_cte A
-    96277 | None | ACCESS_EXCLUSIVE | TABLE | auth_user | None | lock table auth_user in access exc
+    76362 | 21:02:35 | False, ACCESS_EXCLUSIVE | TABLE | auth_user | None | lock table auth_user in access ex
+    246 | 0:00:00 | True | ACCESS_SHARE | INDEX | pg_class_tblspc_relfilenode_index | None | WITH _pgactivity
+    246 | 0:00:00 | True | ACCESS_SHARE | INDEX | pg_class_relname_nsp_index | None | WITH _pgactivity_activi
+    246 | 0:00:00 | True | ACCESS_SHARE | INDEX | pg_class_oid_index | None | WITH _pgactivity_activity_cte A
+    96277 | 0:00:00 | True | ACCESS_EXCLUSIVE | TABLE | auth_user | None | lock table auth_user in access exc
 
 .. note::
 
@@ -38,7 +38,8 @@ Use ``-e`` (or ``--expanded``) to avoid truncating results::
 
     ───────────────────────────────────────────────────────────────────────────────────────────────
     activity_id: 76362
-    wait_duration: 21:03:53
+    activity__duration: 21:03:53
+    granted: False
     mode: ACCESS_EXCLUSIVE
     rel_kind: TABLE
     rel_name: auth_user
@@ -46,7 +47,8 @@ Use ``-e`` (or ``--expanded``) to avoid truncating results::
     activity__query: lock table auth_user in access exclusive mode;
     ───────────────────────────────────────────────────────────────────────────────────────────────
     activity_id: 514
-    wait_duration: None
+    activity__duration: 0:00:00
+    granted: True
     mode: ACCESS_SHARE
     rel_kind: INDEX
     rel_name: pg_class_tblspc_relfilenode_index
@@ -60,10 +62,10 @@ Use ``-e`` (or ``--expanded``) to avoid truncating results::
     `django-pgactivity <https://django-pgactivity.readthedocs.io>`__ to better
     understand what parts of your application are acquiring locks.
 
-Use ``-f`` (or ``--filter``) to filter results. Below we filter for locks that have wait durations
-greater than five seconds on tables::
+Use ``-f`` (or ``--filter``) to filter results. Below we filter for queries longer than
+five seconds where locks haven't been granted::
 
-    python manage.py pglock -f "wait_duration__gt=5 seconds" -f rel_kind=TABLE
+    python manage.py pglock -f "activity__duration__gt=5 seconds" -f "granted=False"
 
 .. tip::
 
@@ -102,10 +104,18 @@ with ``-y`` (or ``--yes``).
 
 Supply the ``--blocking`` flag with ``--cancel`` or ``--terminate``
 to cancel or terminate all *blocking* queries of the activity.
-For example, this will kill all blocking queries of activity
-that has been blocked for over a minute::
+For example, this will kill all blocking queries
+that have been running for over a minute::
 
-    python manage.py pglock -f "wait_duration__gt=1 minute" --blocking --terminate
+    python manage.py pglock -f "activity__duration__gt=1 minute" --blocking --terminate
+
+.. tip::
+
+    The ``wait_duration`` field on
+    `PGLock` provides the time spent waiting for a lock or ``None`` if the
+    lock has been acquired. Use this field to more accurately kill queries
+    based on wait time. This is only available
+    in Postgres 14 and up.
 
 Re-usable Configurations
 ------------------------
@@ -118,7 +128,7 @@ to kill all blocking activity for locks that have waited longer than a minute:
 
     PGLOCK_CONFIGS = {
         "kill-long-blocking": {
-            "filters": ["wait_duration__gt=1 minute"],
+            "filters": ["activity__duration__gt=1 minute"],
             "yes": True,
             "blocking": True,
             "terminate": True
