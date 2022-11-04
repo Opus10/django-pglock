@@ -1,5 +1,12 @@
 # Changelog
-## 1.0.0 (2022-10-24)
+## 1.1.0 (2022-11-03)
+### Bug
+  - Fix PG10-13 issues. [Wesley Kendall, bf2036b]
+
+    The waitstart column in the pg_locks view wasn't introduced until Postgres14.
+    If using earlier versions, ``django-pglock`` will return null for these columns.
+
+## 1.0.0 (2022-10-25)
 ### Api-Break
   - Initial release of ``django-pglock`` [Wesley Kendall, 731e0cc]
 
