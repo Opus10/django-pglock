@@ -10,7 +10,7 @@ PGLOCK_ATTRIBUTES
 
 The default attributes of the `PGLock` model shown by the ``pglock`` management command.
 
-**Default** ``("activity_id", "wait_duration", "mode", "rel_kind", "rel_name", "activity__context", "activity__query")``
+**Default** ``("activity_id", "activity__duration", "mode", "rel_kind", "rel_name", "activity__context", "activity__query")``
 
 PGLOCK_BLOCKING_ATTRIBUTES
 --------------------------
@@ -29,8 +29,8 @@ are referenced by their key in the dictionary.
 For example::
 
     PGLOCK_CONFIGS = {
-        "long-running": {
-            "filters": ["wait_duration__gt=1 minute"]
+        "blocked": {
+            "filters": ["granted=False"]
         }
     }
 
