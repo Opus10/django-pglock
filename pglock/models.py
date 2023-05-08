@@ -64,7 +64,7 @@ class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
                         WHEN 'f' THEN 'FOREIGN_TABLE'::text
                         WHEN 'p' THEN 'PARTITIONED_TABLE'::text
                         WHEN 'I' THEN 'PARTITIONED_INDEX'::text
-                        ELSE pg_class.relkind
+                        ELSE pg_class.relkind::text
                     END AS rel_kind,
                     UPPER(locktype) as type,
                     pg_class.relname as rel_name,
