@@ -1,5 +1,13 @@
 # Changelog
-## 1.1.0 (2022-11-03)
+## 1.2.0 (2023-05-08)
+### Feature
+  - Support PG15 [Wesley Kendall, 31edec7]
+
+    PG15 is supported and tested
+### Trivial
+  - Updated with the latest Python project template [Wesley Kendall, 109f794]
+
+## 1.1.0 (2022-11-04)
 ### Bug
   - Fix PG10-13 issues. [Wesley Kendall, bf2036b]
 
