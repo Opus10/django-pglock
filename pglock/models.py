@@ -1,10 +1,10 @@
 from django.apps import apps
 from django.conf import settings
-from django.db import connections, DEFAULT_DB_ALIAS, models
+from django.db import DEFAULT_DB_ALIAS, models
 import pgactivity
 import pgactivity.models
 
-from pglock import config
+from pglock import config, utils
 
 
 class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
@@ -16,9 +16,6 @@ class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
 
     def get_ctes(self):
         ctes = super().get_ctes()
-
-        with connections[self.using].cursor() as cursor:
-            pg_version = str(cursor.connection.server_version).rjust(6, "0")
 
         if self.query.relations:
             models = [
@@ -33,11 +30,12 @@ class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
         else:
             rel_name_clause = ""
 
-        if int(pg_version[:2]) >= 14:
-            # Waitstart is available in pg 14 and up
-            wait_start_clause = "waitstart AS wait_start, NOW() - waitstart AS wait_duration"
-        else:  # pragma: no cover
-            wait_start_clause = "NULL AS wait_start, NULL AS wait_duration"
+        with self.connection.cursor() as cursor:  # pragma: no cover
+            if utils.pg_maj_version(cursor) >= 14:
+                # Waitstart is available in pg 14 and up
+                wait_start_clause = "waitstart AS wait_start, NOW() - waitstart AS wait_duration"
+            else:
+                wait_start_clause = "NULL AS wait_start, NULL AS wait_duration"
 
         lock_cte = rf"""
             _pglock_lock_cte AS (
