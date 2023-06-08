@@ -395,7 +395,7 @@ def test_prioritize(reraise):
 
     @reraise.wrap
     def assert_terminated():
-        with pytest.raises(OperationalError, match="terminating"):
+        with pytest.raises(OperationalError, match="terminat"):
             with transaction.atomic():
                 assert pglock.model("auth.User", timeout=0)
                 barrier.wait(timeout=5)

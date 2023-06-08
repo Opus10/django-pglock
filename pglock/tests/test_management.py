@@ -83,7 +83,7 @@ def test_listing(capsys, reraise, mocker):
     def lock_1():
         blocking_pid.append(pgactivity.pid())
 
-        with pytest.raises(OperationalError, match="terminating"):
+        with pytest.raises(OperationalError, match="terminat"):
             with transaction.atomic():
                 pglock.model("auth.User")
                 barrier3.wait(timeout=5)
