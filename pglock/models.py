@@ -1,8 +1,10 @@
+from typing import Any, List, Union
+
+import pgactivity
+import pgactivity.models
 from django.apps import apps
 from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS, models
-import pgactivity
-import pgactivity.models
 
 from pglock import config, utils
 
@@ -118,7 +120,7 @@ class PGTableQuerySet(pgactivity.models.PGTableQuerySet):
 class PGLockQuerySet(PGTableQuerySet):
     """The Queryset for the `PGLock` model."""
 
-    def on(self, *relations):
+    def on(self, *relations: Union[models.Model, str]) -> models.QuerySet:
         """Set the relations to filter against.
 
         Currently model names or classes are accepted.
@@ -127,28 +129,27 @@ class PGLockQuerySet(PGTableQuerySet):
         qs.query.relations = relations
         return qs
 
-    def cancel_activity(self):
-        """Cancel all PIDs in the ``activity`` field of the filtered queryset"""
+    def cancel_activity(self) -> List[int]:
+        """Cancel all PIDs in the `activity` field of the filtered queryset"""
         pids = list(self.values_list("activity_id", flat=True).distinct())
         return pgactivity.cancel(*pids, using=self.db)
 
-    def terminate_activity(self):
-        """Terminate all PIDs in the ``activity`` field of the filtered queryset"""
+    def terminate_activity(self) -> List[int]:
+        """Terminate all PIDs in the `activity` field of the filtered queryset"""
         pids = list(self.values_list("activity_id", flat=True).distinct())
         return pgactivity.terminate(*pids, using=self.db)
 
-    def config(self, name, **overrides):
+    def config(self, name: str, **overrides: Any) -> models.QuerySet:
         """
-        Use a config name from ``settings.PGLOCK_CONFIGS``
-        to apply filters. Config overrides can be provided
-        in the keyword arguments.
+        Use a config name from `settings.PGLOCK_CONFIGS` to apply filters.
+        Config overrides can be provided in the keyword arguments.
 
         Args:
-            name (str): Name of the config. Must be a key from ``settings.PGLOCK_CONFIGS``.
+            name: Name of the config. Must be a key from `settings.PGLOCK_CONFIGS`.
             **overrides: Any overrides to apply to the final config dictionary.
 
         Returns:
-            dict: The configuration
+            The configuration
         """
         qset = self
 
@@ -183,19 +184,19 @@ class BasePGLock(pgactivity.models.PGTable):
 
 class PGLock(BasePGLock):
     """
-    Wraps Postgres's ``pg_locks`` view.
+    Wraps Postgres's `pg_locks` view.
 
     Attributes:
         type (models.CharField): The type of lock. One of
             RELATION, EXTEND, FROZENID, PAGE, TUPLE, TRANSACTIONID, VIRTUALXID,
             SPECTOKEN, OBJECT, USERLOCK, or ADVISORY.
         activity (models.ForeignKey[pgactivity.PGActivity]): The activity
-            from ``pg_stats_activity`` this lock references.
+            from `pg_stats_activity` this lock references.
         mode (models.CharField): The mode of lock. One of
             ACCESS_SHARE, ROW_SHARE, ROW_EXCLUSIVE, SHARE_UPDATE_EXCLUSIVE,
             SHARE, SHARE_ROW_EXCLUSIVE, EXCLUSIVE, ACCESS_EXCLUSIVE.
-        granted (models.BooleanField): ``True`` if the lock has been granted,
-            ``False`` if the lock is blocked by another.
+        granted (models.BooleanField): `True` if the lock has been granted,
+            `False` if the lock is blocked by another.
         wait_start (models.DateTimeField): When the lock started waiting. Only
             available in Postgres 14 and up.
         wait_duration (models.DurationField): How long the lock has been blocked.
@@ -205,7 +206,7 @@ class PGLock(BasePGLock):
             COMPOSITE_TYPE, FOREIGN_TABLE, PARTITIONED_TABLE, or
             PARTITIONED_INDEX.
         rel_name (models.CharField): The name of the relation. E.g. the table name
-            when ``rel_kind=TABLE``.
+            when `rel_kind=TABLE`.
     """
 
     class Meta:
@@ -218,12 +219,12 @@ class BlockedPGLockQuerySet(PGLockQuerySet):
     """The Queryset for the `BlockedPGLock` model. Inherits `PGLockQuerySet`"""
 
     def cancel_blocking_activity(self):
-        """Cancel all PIDs in the ``blocking_activity`` field of the filtered queryset"""
+        """Cancel all PIDs in the `blocking_activity` field of the filtered queryset"""
         pids = list(self.values_list("blocking_activity_id", flat=True).distinct())
         return pgactivity.cancel(*pids, using=self.db)
 
     def terminate_blocking_activity(self):
-        """Terminate all PIDs in the ``blocking_activity`` field of the filtered queryset"""
+        """Terminate all PIDs in the `blocking_activity` field of the filtered queryset"""
         pids = list(self.values_list("blocking_activity_id", flat=True).distinct())
         return pgactivity.terminate(*pids, using=self.db)
 
@@ -241,7 +242,7 @@ class BlockedPGLockQuerySet(PGLockQuerySet):
 class BlockedPGLock(BasePGLock):
     """Models a blocked lock.
 
-    Uses Postgres's ``pg_blocking_pids`` function to unnest and
+    Uses Postgres's `pg_blocking_pids` function to unnest and
     denormalize any blocking activity for a lock, returning both
     the activity and blocking activity as a row.
 
