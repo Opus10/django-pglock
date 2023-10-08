@@ -1,6 +1,6 @@
+import pytest
 from django.db import transaction
 from django.db.utils import OperationalError
-import pytest
 
 from pglock import models
 

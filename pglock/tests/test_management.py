@@ -2,11 +2,11 @@ import io
 import threading
 import time
 
+import pgactivity
+import pytest
 from django.core.management import call_command
 from django.db import transaction
 from django.db.utils import OperationalError
-import pgactivity
-import pytest
 
 import pglock
 from pglock.management.commands import pglock as pglock_command

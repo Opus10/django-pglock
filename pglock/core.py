@@ -4,11 +4,12 @@ import functools
 import hashlib
 import inspect
 import threading
+from typing import Tuple, Union
 
-from django.apps import apps
-from django.db import connections, DEFAULT_DB_ALIAS, transaction
-from django.db.utils import OperationalError
 import pgactivity
+from django.apps import apps
+from django.db import DEFAULT_DB_ALIAS, connections, models, transaction
+from django.db.utils import OperationalError
 
 from pglock import utils
 
@@ -90,24 +91,27 @@ def _is_transaction_errored(cursor):
 
 
 @contextlib.contextmanager
-def lock_timeout(timeout=_unset, *, using=DEFAULT_DB_ALIAS, **timedelta_kwargs):
+def lock_timeout(
+    timeout: Union[dt.timedelta, int, float, None] = _unset,
+    *,
+    using: str = DEFAULT_DB_ALIAS,
+    **timedelta_kwargs: int,
+):
     """Set the lock timeout as a decorator or context manager.
 
-    A value of ``None`` will set an infinite lock timeout.
+    A value of `None` will set an infinite lock timeout.
     A value of less than a millisecond is not permitted.
 
     Nested invocations will successfully apply and rollback the timeout to
     the previous value.
 
     Args:
-        timeout (Union[datetime.timedelta, int, float, None]): The number
-            of seconds as an integer or float. Use a timedelta object to
-            precisely specify the timeout interval. Use ``None`` for
-            an infinite timeout.
-        using (str, default="default"): The database to use.
+        timeout: The number of seconds as an integer or float. Use a timedelta object to
+            precisely specify the timeout interval. Use `None` for an infinite timeout.
+        using: The database to use.
         **timedelta_kwargs: Keyword arguments to directly supply to
             datetime.timedelta to create an interval. E.g.
-            ``pglock.timeout(seconds=1, milliseconds=100)``
+            `pglock.timeout(seconds=1, milliseconds=100)`
             will create a timeout of 1100 milliseconds.
 
     Raises:
@@ -124,7 +128,7 @@ def lock_timeout(timeout=_unset, *, using=DEFAULT_DB_ALIAS, **timedelta_kwargs):
 
         if not timeout:
             raise ValueError(
-                "Must supply value greater than a millisecond to pglock.timeout or use ``None`` to"
+                "Must supply value greater than a millisecond to pglock.timeout or use `None` to"
                 " reset the timeout."
             )
     else:
@@ -163,10 +167,16 @@ def _cast_lock_id(lock_id):
         raise TypeError(f'Lock ID "{lock_id}" is not a string or int')
 
 
-def advisory_id(lock_id):
+def advisory_id(lock_id: Union[str, int]) -> Tuple[int, int]:
     """
     Given a lock ID, return the (classid, objid) tuple that Postgres uses
-    for the advisory lock in the pg_locks table
+    for the advisory lock in the pg_locks table,
+
+    Args:
+        lock_id: The lock ID
+
+    Returns:
+        The (classid, objid) tuple
     """
     lock_id = _cast_lock_id(lock_id)
     return lock_id >> 32, lock_id & 0xFFFFFFFF
@@ -175,37 +185,35 @@ def advisory_id(lock_id):
 class advisory(contextlib.ContextDecorator):
     """Obtain an advisory lock.
 
+    When using the default side effect, returns `True` if the lock was acquired or `False` if not.
+
     Args:
         lock_id (Union[str, int], default=None): The ID of the lock. When
             using the decorator, it defaults to the full module path and
             function name of the wrapped function. It must be supplied to
             the context manager.
-        shared (bool, default=False): When ``True``, creates a shared
+        shared (bool, default=False): When `True`, creates a shared
             advisory lock. Consult the
             `Postgres docs <https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS>`__
             for more information.
         using (str, default="default"): The database to use.
         timeout (Union[int, float, datetime.timedelta, None]): Set a timeout when waiting
             for the lock. This timeout only applies to the lock acquisition statement and not the
-            wrapped code. If 0, ``pg_try_advisory_lock`` will be used to return immediately. If
-            ``None``, an infinite timeout will be used. When
+            wrapped code. If 0, `pg_try_advisory_lock` will be used to return immediately. If
+            `None`, an infinite timeout will be used. When
             using a timeout, the acquisition status will be returned when running as a context
-            manager. Use the ``side_effect`` argument to change the runtime behavior.
+            manager. Use the `side_effect` argument to change the runtime behavior.
         side_effect (str): Adjust the runtime behavior when using a timeout.
             `pglock.Return` will return the acquisition status when using the context manager.
-            `pglock.Raise` will raise a ``django.db.utils.OperationalError`` if the lock cannot
+            `pglock.Raise` will raise a `django.db.utils.OperationalError` if the lock cannot
             be acquired or a timeout happens. `pglock.Skip` will skip decoratored code if the
             lock cannot be acquired. Defaults to `pglock.Return` when used as a context manager
             or `pglock.Raise` when used as a decorator.
 
-    Returns:
-        bool: When using the default side effect, returns ``True`` if the lock was acquired or
-        ``False`` if not.
-
     Raises:
         django.db.utils.OperationalError: When a lock cannot be acquired or a timeout happens
-            when using ``side_effect=pglock.Raise``.
-        ValueError: If an invalid ``side_effect`` is provided or no lock ID is supplied for
+            when using `side_effect=pglock.Raise`.
+        ValueError: If an invalid `side_effect` is provided or no lock ID is supplied for
             the context manager.
         TypeError: If the lock ID is not a string or int.
     """  # noqa
@@ -339,44 +347,37 @@ class advisory(contextlib.ContextDecorator):
 
 
 def model(
-    *models,
-    mode=ACCESS_EXCLUSIVE,
-    using=DEFAULT_DB_ALIAS,
-    timeout=_unset,
-    side_effect=Return,
-):
+    *models: Union[str, models.Model],
+    mode: str = ACCESS_EXCLUSIVE,
+    using: str = DEFAULT_DB_ALIAS,
+    timeout: Union[int, float, dt.timedelta, None] = _unset,
+    side_effect: SideEffect = Return,
+) -> bool:
     """Lock model(s).
 
     Args:
-        *models (Union[str, models.Model]): Model paths (e.g. "app_label.Model") or
-            classes to lock.
-        mode (str, default=pglock.ACCESS_EXCLUSIVE): The lock mode.
-            See the
-            `Postgres docs <https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-TABLES>`__
-            for a list of all modes and what they mean.
-            There is a constant for each one in the ``pglock`` module, e.g.
-            ``pglock.ACCESS_SHARE``.
-        using (str, default="default"): The database to use.
-        timeout (Union[int, float, datetime.timedelta, None]): Set a timeout when waiting
-            for the lock. If 0, ``NOWAIT` will be used to return immediately. If ``None``, the
-            timeout is infinite. When using a timeout, the acquisition status will be returned.
-            Use the ``side_effect`` argument to change the runtime behavior.
-        side_effect (str, default=pglock.Return): Adjust the runtime behavior when using a timeout.
-            `pglock.Return` will return the acquisition status. `pglock.Raise` will
-            raise a ``django.db.utils.OperationalError`` if the lock cannot
-            be acquired or a timeout happens.
+        *models: Model paths (e.g. "app_label.Model") or classes to lock.
+        mode: The lock mode. See the
+            [Postgres docs](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-TABLES)
+            for a list of all modes and what they mean. There is a constant for each one in the
+            `pglock` module, e.g. `pglock.ACCESS_SHARE`.
+        using: The database to use.
+        timeout: Set a timeout when waiting for the lock. If 0, `NOWAIT` will be used to return
+            immediately. If `None`, the timeout is infinite. When using a timeout, the acquisition
+            status will be returned. Use the `side_effect` argument to change the runtime behavior.
+        side_effect: Adjust the runtime behavior when using a timeout. `pglock.Return` will return
+            the acquisition status. `pglock.Raise` will raise a `django.db.utils.OperationalError`
+            if the lock cannot be acquired or a timeout happens.
 
     Returns:
-        bool: When using the default side effect, returns ``True`` if the lock was acquired or
-        ``False`` if not.
+        When using the default side effect, returns `True` if the lock was acquired or `False` if not.
 
     Raises:
-        django.db.utils.OperationalError: If ``side_effect=pglock.Raise`` and a lock cannot be
+        django.db.utils.OperationalError: If `side_effect=pglock.Raise` and a lock cannot be
             acquired or a timeout occurs.
         RuntimeError: When running code outside of a transaction.
-        ValueError: When ``side_effect`` is an invalid value or no models are supplied.
-        TypeError: When ``timeout`` is an invalid type.
-
+        ValueError: When `side_effect` is an invalid value or no models are supplied.
+        TypeError: When `timeout` is an invalid type.
     """  # noqa
     timeout = _cast_timeout(timeout)
     side_effect = side_effect.__class__ if not inspect.isclass(side_effect) else side_effect
@@ -403,7 +404,7 @@ def model(
                 # the transaction isn't in an errored state when returning.
                 stack.enter_context(transaction.atomic(using=using))
 
-            # Set the lock timeout when either ``None`` or a non-zero
+            # Set the lock timeout when either `None` or a non-zero
             # timeout has been supplied.
             if timeout is not _unset and not nowait:
                 stack.enter_context(lock_timeout(timeout, using=using))
@@ -411,13 +412,13 @@ def model(
             with connections[using].cursor() as cursor:
                 cursor.execute(sql)
                 return True
-    except OperationalError:
+    except OperationalError as exc:
         if side_effect == Return:
             return False
         elif side_effect == Raise:
             raise
         else:
-            raise AssertionError
+            raise AssertionError from exc
 
 
 def _prioritize_bg_task(backend_pid, side_effect):
@@ -448,8 +449,8 @@ class _PeriodicTimer(threading.Timer):
 class PrioritizeSideEffect(SideEffect):
     """Base class for `pglock.prioritize` side effects.
 
-    Must override the ``worker`` method, which takes
-    a `pglock.models.BlockedPGLock` queryset of all locks
+    Must override the `worker` method, which takes
+    a [pglock.models.BlockedPGLock][] queryset of all locks
     that are blocking the prioritized process.
 
     Return the process IDs or blocked locks that were
@@ -457,7 +458,7 @@ class PrioritizeSideEffect(SideEffect):
 
     Prioritize side effects take optional filters
     when initialize, which are passed to the underlying
-    `pglock.models.BlockedPGLock` queryset.
+    [pglock.models.BlockedPGLock][] queryset.
     """
 
     def __init__(self, **filters):
@@ -475,7 +476,7 @@ class Terminate(PrioritizeSideEffect):
     The side effect for terminating blocking locks
     when using `pglock.prioritize`.
 
-    Calls ``teminate_blocking_activity`` on the
+    Calls `teminate_blocking_activity` on the
     blocked lock queryset.
 
     Supply a duration to only terminate queries lasting greater than the
@@ -491,7 +492,7 @@ class Cancel(PrioritizeSideEffect):  # pragma: no cover
     The side effect for canceling blocking locks
     when using `pglock.prioritize`.
 
-    Calls ``cancel_blocking_activity`` on the
+    Calls `cancel_blocking_activity` on the
     blocked lock queryset.
 
     Supply a duration to only cancel queries lasting greater than the
@@ -505,39 +506,35 @@ class Cancel(PrioritizeSideEffect):  # pragma: no cover
 @contextlib.contextmanager
 def prioritize(
     *,
-    interval=1,
-    periodic=True,
-    using=DEFAULT_DB_ALIAS,
-    retries=0,
-    timeout=_unset,
-    side_effect=Terminate,
-):
+    interval: Union[int, float, dt.timedelta] = 1,
+    periodic: bool = True,
+    using: str = DEFAULT_DB_ALIAS,
+    timeout: Union[dt.timedelta, int, float, None] = _unset,
+    side_effect: PrioritizeSideEffect = Terminate,
+) -> None:
     """Kill any blocking locks.
 
     `pglock.prioritize` has a periodic background worker thread that checks for blocking activity
     and terminates it.
 
     Args:
-        interval (Union[int, float, datetime.timedelta], default=1): The interval at
-            which the background worker runs. Defaults to running every second.
-        periodic (bool, default=True): If the worker should be ran periodically. If False,
-            blocking locks are only killed once after the initial interval has happened.
-        using (str, default="default"): The database to use.
-        timeout (Union[datetime.timdelta, int, float, None]): The lock timeout to apply to the
-            wrapped code. This is synonymous with using with
-            ``with pglock.prioritize(), pglock.timeout()``. Although the background worker should
+        interval: The interval (in seconds) at which the background worker runs.
+        periodic: If the worker should be ran periodically. If False, blocking locks are
+            only killed once after the initial interval has happened.
+        using: The database to use.
+        timeout: The lock timeout to apply to the wrapped code. This is synonymous with using with
+            `with pglock.prioritize(), pglock.timeout()`. Although the background worker should
             properly terminate blocking locks, this serves as a backup option
-            to ensure wrapped code doesn't block for too long. Never use a ``timeout`` that
-            is less than ``interval``.
-        side_effect (pglock.PrioritizeSideEffect, default=pglock.Terminate): The side effect
-            called by the background worker. Supplied a `BlockedPGLock` queryset of locks
-            blocking the prioritized code. Returns a list of all blocking PIDs that have been
-            handled. The default side effect of ``pglock.Terminte`` will terminate blocking
-            processes. `pglock.Cancel` is another side effect that can be used to cancel
+            to ensure wrapped code doesn't block for too long. Never use a `timeout` that
+            is less than `interval`.
+        side_effect: The side effect called by the background worker. Supplied a `BlockedPGLock`
+            queryset of locks blocking the prioritized code. Returns a list of all blocking PIDs
+            that have been handled. The default side effect of `pglock.Terminte` will terminate
+            blocking processes. `pglock.Cancel` is another side effect that can be used to cancel
             blocking processes.
 
     Raises:
-        django.db.utils.OperationalError: If ``timeout`` is used and the timeout expires.
+        django.db.utils.OperationalError: If `timeout` is used and the timeout expires.
     """
     side_effect = side_effect() if inspect.isclass(side_effect) else side_effect
 

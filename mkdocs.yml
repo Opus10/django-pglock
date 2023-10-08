@@ -1,0 +1,80 @@
+site_name: django-pglock
+docs_dir: docs
+
+repo_name: Opus10/django-pglock
+repo_url: https://github.com/Opus10/django-pglock
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          import:
+          - https://docs.python.org/3/objects.inv
+          - https://installer.readthedocs.io/en/stable/objects.inv  # demonstration purpose in the docs
+          - https://mkdocstrings.github.io/autorefs/objects.inv
+          options:
+            docstring_options:
+              ignore_init_summary: true
+            line_length: 80
+            # docstring_section_style: list
+            heading_level: 2
+            merge_init_into_class: true
+            separate_signature: true
+            show_root_heading: true
+            show_root_full_path: true
+            show_root_members_full_path: true
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+
+markdown_extensions:
+  # For admonitions
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+theme:
+  name: material
+  features:
+    - navigation.footer
+    - navigation.path
+    - navigation.sections
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - toc.follow
+
+extra_css:
+  - css/mkdocstrings.css
+  - css/mkdocs-material.css
+
+nav:
+  - Overview: index.md
+  - Installation: installation.md
+  - Usage Guides:
+      - Advisory Locks: advisory.md
+      - Model Locks: model.md
+      - Setting the Lock Timeout: timeout.md
+      - Prioritizing Blocked Code: prioritize.md
+      - Proxy Models: proxy.md
+      - Management Command: command.md
+  - API:
+      - Settings: settings.md
+      - Module: module.md
+      - Release Notes: release_notes.md
+      - Contributing Guide: contributing.md

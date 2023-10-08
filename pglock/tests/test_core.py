@@ -3,10 +3,10 @@ import random
 import threading
 
 import ddf
+import pytest
 from django.contrib.auth.models import Group, User
 from django.db import connection, transaction
 from django.db.utils import IntegrityError, OperationalError
-import pytest
 
 import pglock
 
