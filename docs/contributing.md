@@ -34,7 +34,7 @@ If your code fails the linter checks, fix common errors with:
 
 ## Committing
 
-This project uses [git-tidy](<https://github.com/Opus10/git-tidy) to produce structured commits with git trailers. Information from commit messages is used to generate release notes and bump the version properly.
+This project uses [git-tidy](https://github.com/Opus10/git-tidy) to produce structured commits with git trailers. Information from commit messages is used to generate release notes and bump the version properly.
 
 To do a structured commit with `git-tidy`, do:
 
