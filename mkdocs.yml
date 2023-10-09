@@ -11,13 +11,12 @@ plugins:
         python:
           import:
           - https://docs.python.org/3/objects.inv
-          - https://installer.readthedocs.io/en/stable/objects.inv  # demonstration purpose in the docs
+          - https://installer.readthedocs.io/en/stable/objects.inv
           - https://mkdocstrings.github.io/autorefs/objects.inv
           options:
             docstring_options:
               ignore_init_summary: true
             line_length: 80
-            # docstring_section_style: list
             heading_level: 2
             merge_init_into_class: true
             separate_signature: true
@@ -50,6 +49,7 @@ markdown_extensions:
 
 theme:
   name: material
+  logo: static/logo.svg
   features:
     - navigation.footer
     - navigation.path
@@ -58,6 +58,19 @@ theme:
     - search.suggest
     - search.highlight
     - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: #6658ea
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: #6658ea
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
 
 extra_css:
   - css/mkdocstrings.css

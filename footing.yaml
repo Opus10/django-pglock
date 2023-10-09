@@ -1,7 +1,7 @@
 _extensions:
 - jinja2_time.TimeExtension
 _template: git@github.com:Opus10/public-django-app-template.git
-_version: 44095e0a6f220613881d17d41e3ff8d2dc5a38e8
+_version: 61fb54bab32508ca0cc5d70a9155f49d124f04c0
 module_name: pglock
 repo_name: django-pglock
 short_description: Postgres locking routines and lock table access.
