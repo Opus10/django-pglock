@@ -1,10 +1,16 @@
 # Changelog
 
+## 1.4.1 (2023-10-09)
+
+### Trivial
+
+  - Added Opus10 branding to docs [Wesley Kendall, 80e8466]
+
 ## 1.4.0 (2023-10-08)
 
 ### Feature
 
-  - Add Python3.12 support and use Mkdocs for documentation [Wes Kendall, a192e5e]
+  - Add Python3.12 support and use Mkdocs for documentation [Wesley Kendall, d706755]
 
     Python 3.12 and Postgres 16 are supported now, along with having revamped docs using Mkdocs and the Material theme.
 

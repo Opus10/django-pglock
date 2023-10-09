@@ -29,7 +29,7 @@ packages = [
 exclude = [
   "*/tests/"
 ]
-version = "1.4.0"
+version = "1.4.1"
 description = "Postgres locking routines and lock table access."
 authors = ["Opus 10 Engineering"]
 classifiers = [
