@@ -1,4 +1,5 @@
 """Core way to access configuration"""
+
 from django.conf import settings
 
 

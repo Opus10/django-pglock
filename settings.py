@@ -29,3 +29,5 @@ PGLOCK_CONFIGS = {
         "terminate": True,
     },
 }
+
+USE_TZ = False
