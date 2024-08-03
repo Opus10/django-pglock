@@ -485,10 +485,10 @@ class PrioritizeSideEffect(SideEffect):
     def __init__(self, **filters: Any) -> None:
         self.filters = filters
 
-    def worker(self, blocked_locks: Any) -> Never:
+    def worker(self, blocked_locks: BlockedPGLockQuerySet) -> list[int]:
         raise NotImplementedError
 
-    def __call__(self, blocked_locks):
+    def __call__(self, blocked_locks: BlockedPGLockQuerySet) -> list[int]:
         return self.worker(blocked_locks.filter(**self.filters))
 
 
