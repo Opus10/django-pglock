@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import contextlib
 import datetime as dt
 import functools
@@ -7,13 +8,13 @@ import hashlib
 import inspect
 import threading
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Final, Generator, cast
+from typing import TYPE_CHECKING, Any, Final, Generator, cast, TypeVar
 
 import pgactivity
 from django.apps import apps
 from django.db import DEFAULT_DB_ALIAS, connections, models, transaction
 from django.db.utils import OperationalError
-from typing_extensions import LiteralString
+from typing_extensions import LiteralString, ParamSpec
 
 from pglock import utils
 
@@ -28,6 +29,8 @@ elif utils.psycopg_maj_version == 3:
 else:
     raise AssertionError
 
+_R = TypeVar("_R")
+_P = ParamSpec("_P")
 
 # Lock levels
 ACCESS_SHARE: Final = "ACCESS SHARE"
@@ -266,11 +269,11 @@ class advisory(contextlib.ContextDecorator):
     def release(self) -> LiteralString:
         return f'pg_advisory_unlock{"_shared" if self.shared else ""}'
 
-    def __call__(self, func):
+    def __call__(self, func: Callable[_P, _R]) -> Callable[_P, _R | None]:  # type: ignore[override]
         self._func = func
 
         @functools.wraps(func)
-        def inner(*args, **kwargs):
+        def inner(*args: _P.args, **kwargs: _P.kwargs) -> _R | None:
             with self._recreate_cm():
                 if self.acquired or self.side_effect != Skip:
                     return func(*args, **kwargs)
