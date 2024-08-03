@@ -13,7 +13,7 @@ import pgactivity
 from django.apps import apps
 from django.db import DEFAULT_DB_ALIAS, connections, models, transaction
 from django.db.utils import OperationalError
-from typing_extensions import LiteralString, Never
+from typing_extensions import LiteralString
 
 from pglock import utils
 
