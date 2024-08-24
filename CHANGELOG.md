@@ -2,13 +2,13 @@
 
 ## 1.5.1 (2024-04-06)
 
-### Trivial
+#### Trivial
 
   - Fix ReadTheDocs builds. [Wesley Kendall, f1b9c5c]
 
 ## 1.5.0 (2023-11-26)
 
-### Feature
+#### Feature
 
   - Django 5.0 compatibility [Wesley Kendall, 5197c72]
 
@@ -16,13 +16,13 @@
 
 ## 1.4.1 (2023-10-09)
 
-### Trivial
+#### Trivial
 
   - Added Opus10 branding to docs [Wesley Kendall, 80e8466]
 
 ## 1.4.0 (2023-10-08)
 
-### Feature
+#### Feature
 
   - Add Python3.12 support and use Mkdocs for documentation [Wesley Kendall, d706755]
 
@@ -32,7 +32,7 @@
 
 ## 1.3.0 (2023-06-08)
 
-### Feature
+#### Feature
 
   - Added Python 3.11, Django 4.2, and Psycopg 3 support [Wesley Kendall, 62c86bf]
 
@@ -40,19 +40,19 @@
 
 ## 1.2.0 (2023-05-08)
 
-### Feature
+#### Feature
 
   - Support PG15 [Wesley Kendall, 31edec7]
 
     PG15 is supported and tested
 
-### Trivial
+#### Trivial
 
   - Updated with the latest Python project template [Wesley Kendall, 109f794]
 
 ## 1.1.0 (2022-11-04)
 
-### Bug
+#### Bug
 
   - Fix PG10-13 issues. [Wesley Kendall, bf2036b]
 
@@ -61,7 +61,7 @@
 
 ## 1.0.0 (2022-10-25)
 
-### Api-Break
+#### Api-Break
 
   - Initial release of ``django-pglock`` [Wesley Kendall, 731e0cc]
 
