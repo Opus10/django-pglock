@@ -29,7 +29,7 @@ exclude = [
 ]
 version = "1.5.1"
 description = "Postgres locking routines and lock table access."
-authors = ["Opus 10 Engineering"]
+authors = ["Wes Kendall"]
 classifiers = [
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
