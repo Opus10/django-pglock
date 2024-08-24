@@ -97,7 +97,7 @@ Use `python manage.py pglock` to view and kill locks from the command line. It h
 
 ## Compatibility
 
-`django-pglock` is compatible with Python 3.8 - 3.12, Django 3.2 - 5.0, Psycopg 2 - 3, and Postgres 12 - 16.
+`django-pglock` is compatible with Python 3.8 - 3.12, Django 4.2 - 5.1, Psycopg 2 - 3, and Postgres 13 - 16.
 
 ## Next Steps
 
