@@ -244,21 +244,13 @@ class advisory(contextlib.ContextDecorator):
     def int_lock_id(self):
         return _cast_lock_id(self.lock_id)
 
-    @property
-    def acquire(self):
-        return f'pg{"_try" if self.nowait else ""}_advisory_lock{"_shared" if self.shared else ""}'
-
-    @property
-    def release(self):
-        return f'pg_advisory_unlock{"_shared" if self.shared else ""}'
-
     def __call__(self, func):
         self._func = func
 
         @functools.wraps(func)
         def inner(*args, **kwargs):
             with self._recreate_cm():
-                if self.acquired or self.side_effect != Skip:
+                if self._acquired or self.side_effect != Skip:
                     return func(*args, **kwargs)
 
         return inner
@@ -300,10 +292,13 @@ class advisory(contextlib.ContextDecorator):
                 " Use it as a context manager instead."
             )
 
-    def __enter__(self):
+    def acquire(self) -> bool:
         self._process_runtime_parameters()
 
-        sql = f"SELECT {self.acquire}({self.int_lock_id})"
+        acquire_sql = (
+            f'pg{"_try" if self.nowait else ""}_advisory_lock{"_shared" if self.shared else ""}'
+        )
+        sql = f"SELECT {acquire_sql}({self.int_lock_id})"
 
         with connections[self.using].cursor() as cursor:
             try:
@@ -317,33 +312,42 @@ class advisory(contextlib.ContextDecorator):
                             stack.enter_context(transaction.atomic(using=self.using))
 
                     cursor.execute(sql)
-                    self.acquired = cursor.fetchone()[0] if self.nowait else True
+                    acquired = cursor.fetchone()[0] if self.nowait else True
             except OperationalError:
                 # This block only happens when the lock times out
                 if self.side_effect != Raise:
-                    self.acquired = False
+                    acquired = False
                 else:
                     raise
 
-            if not self.acquired and self.side_effect == Raise:
-                raise OperationalError(f'Could not acquire lock "{self.lock_id}"')
+        if not acquired and self.side_effect == Raise:
+            raise OperationalError(f'Could not acquire lock "{self.lock_id}"')
 
-            self.stack = contextlib.ExitStack()
-            if self.acquired and connections[self.using].in_atomic_block:
-                # Create a savepoint so that we can successfully release
-                # the lock if the transaction errors
-                self.stack.enter_context(transaction.atomic(using=self.using))
+        return acquired
 
-            self.stack.__enter__()
+    def release(self) -> None:
+        with connections[self.using].cursor() as cursor:
+            release_sql = f'pg_advisory_unlock{"_shared" if self.shared else ""}'
+            cursor.execute(f"SELECT {release_sql}({self.int_lock_id})")
 
-            return self.acquired
+    def __enter__(self):
+        self._acquired = self.acquire()
+
+        self.stack = contextlib.ExitStack()
+        if self._acquired and connections[self.using].in_atomic_block:
+            # Create a savepoint so that we can successfully release
+            # the lock if the transaction errors
+            self.stack.enter_context(transaction.atomic(using=self.using))
+
+        self.stack.__enter__()
+
+        return self._acquired
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.stack.__exit__(exc_type, exc_value, traceback)
 
-        if self.acquired:
-            with connections[self.using].cursor() as cursor:
-                cursor.execute(f"SELECT {self.release}({self.int_lock_id})")
+        if self._acquired:
+            self.release()
 
 
 def model(
