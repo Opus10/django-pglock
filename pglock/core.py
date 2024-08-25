@@ -187,15 +187,17 @@ class advisory(contextlib.ContextDecorator):
 
     When using the default side effect, returns `True` if the lock was acquired or `False` if not.
 
+    Consult the
+    `Postgres docs <https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS>`__
+    for more information on shared and transactional locks.
+
     Args:
         lock_id (Union[str, int], default=None): The ID of the lock. When
             using the decorator, it defaults to the full module path and
             function name of the wrapped function. It must be supplied to
-            the context manager.
-        shared (bool, default=False): When `True`, creates a shared
-            advisory lock. Consult the
-            `Postgres docs <https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS>`__
-            for more information.
+            the context manager or function calls.
+        shared (bool, default=False): When `True`, creates a shared lock.
+        xact (bool, default=False): When `True`, creates a transactional-level lock.
         using (str, default="default"): The database to use.
         timeout (Union[int, float, datetime.timedelta, None]): Set a timeout when waiting
             for the lock. This timeout only applies to the lock acquisition statement and not the
@@ -223,6 +225,7 @@ class advisory(contextlib.ContextDecorator):
         lock_id=None,
         *,
         shared=False,
+        xact=False,
         using=DEFAULT_DB_ALIAS,
         timeout=_unset,
         side_effect=None,
@@ -232,6 +235,7 @@ class advisory(contextlib.ContextDecorator):
         self.using = using
         self.side_effect = side_effect
         self.shared = shared
+        self.xact = xact
         self.timeout = _cast_timeout(timeout)
 
         # Use pg_try_advisory.. when a timeout of 0 has been applied.
@@ -244,13 +248,8 @@ class advisory(contextlib.ContextDecorator):
     def int_lock_id(self):
         return _cast_lock_id(self.lock_id)
 
-    @property
-    def acquire(self):
-        return f'pg{"_try" if self.nowait else ""}_advisory_lock{"_shared" if self.shared else ""}'
-
-    @property
-    def release(self):
-        return f'pg_advisory_unlock{"_shared" if self.shared else ""}'
+    def in_transaction(self) -> bool:
+        return connections[self.using].in_atomic_block
 
     def __call__(self, func):
         self._func = func
@@ -258,7 +257,7 @@ class advisory(contextlib.ContextDecorator):
         @functools.wraps(func)
         def inner(*args, **kwargs):
             with self._recreate_cm():
-                if self.acquired or self.side_effect != Skip:
+                if self._acquired or self.side_effect != Skip:
                     return func(*args, **kwargs)
 
         return inner
@@ -300,10 +299,18 @@ class advisory(contextlib.ContextDecorator):
                 " Use it as a context manager instead."
             )
 
-    def __enter__(self):
+    def acquire(self) -> bool:
         self._process_runtime_parameters()
 
-        sql = f"SELECT {self.acquire}({self.int_lock_id})"
+        if self.xact and not self.in_transaction():
+            raise RuntimeError("Must be in a transaction to use xact=True.")
+
+        acquire_sql = (
+            f'pg{"_try" if self.nowait else ""}_advisory'
+            f'{"_xact" if self.xact else ""}_lock'
+            f'{"_shared" if self.shared else ""}'
+        )
+        sql = f"SELECT {acquire_sql}({self.int_lock_id})"
 
         with connections[self.using].cursor() as cursor:
             try:
@@ -311,39 +318,65 @@ class advisory(contextlib.ContextDecorator):
                     if self.timeout is not _unset and not self.nowait:
                         stack.enter_context(lock_timeout(self.timeout, using=self.using))
 
-                        if self.side_effect != Raise and connections[self.using].in_atomic_block:
+                        if self.side_effect != Raise and self.in_transaction():
                             # If returning True/False, create a savepoint so that
                             # the transaction isn't in an errored state when returning.
                             stack.enter_context(transaction.atomic(using=self.using))
 
                     cursor.execute(sql)
-                    self.acquired = cursor.fetchone()[0] if self.nowait else True
+                    acquired = cursor.fetchone()[0] if self.nowait else True
             except OperationalError:
                 # This block only happens when the lock times out
                 if self.side_effect != Raise:
-                    self.acquired = False
+                    acquired = False
                 else:
                     raise
 
-            if not self.acquired and self.side_effect == Raise:
-                raise OperationalError(f'Could not acquire lock "{self.lock_id}"')
+        if not acquired and self.side_effect == Raise:
+            raise OperationalError(f'Could not acquire lock "{self.lock_id}"')
 
-            self.stack = contextlib.ExitStack()
-            if self.acquired and connections[self.using].in_atomic_block:
-                # Create a savepoint so that we can successfully release
-                # the lock if the transaction errors
-                self.stack.enter_context(transaction.atomic(using=self.using))
+        return acquired
 
-            self.stack.__enter__()
+    def release(self) -> None:
+        if self.xact:
+            raise RuntimeError("Advisory locks with xact=True cannot be manually released.")
 
-            return self.acquired
+        with connections[self.using].cursor() as cursor:
+            release_sql = f'pg_advisory_unlock{"_shared" if self.shared else ""}'
+            cursor.execute(f"SELECT {release_sql}({self.int_lock_id})")
+
+    def __enter__(self):
+        self._transaction_ctx = contextlib.ExitStack()
+        if self.xact:
+            if self.in_transaction():
+                raise RuntimeError(
+                    "Advisory locks with xact=True cannot run inside a transaction."
+                    " Use the functional interface, i.e. pglock.advisory(...).acquire()"
+                )
+
+            # Transactional locks always create a durable transaction
+            self._transaction_ctx.enter_context(transaction.atomic(using=self.using, durable=True))
+
+        self._transaction_ctx.__enter__()
+
+        self._acquired = self.acquire()
+
+        self._savepoint_ctx = contextlib.ExitStack()
+        if self._acquired and not self.xact and self.in_transaction():
+            # Create a savepoint so that we can successfully release
+            # the lock if the transaction errors
+            self._savepoint_ctx.enter_context(transaction.atomic(using=self.using))
+
+        self._savepoint_ctx.__enter__()
+
+        return self._acquired
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.stack.__exit__(exc_type, exc_value, traceback)
+        self._savepoint_ctx.__exit__(exc_type, exc_value, traceback)
+        self._transaction_ctx.__exit__(exc_type, exc_value, traceback)
 
-        if self.acquired:
-            with connections[self.using].cursor() as cursor:
-                cursor.execute(f"SELECT {self.release}({self.int_lock_id})")
+        if self._acquired and not self.xact:
+            self.release()
 
 
 def model(

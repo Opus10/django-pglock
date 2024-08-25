@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0 (2024-08-24)
+
+#### Features
+
+- Support transaction-level locks by [@wesleykendall](https://github.com/wesleykendall) in [#13](https://github.com/Opus10/django-pglock/pull/13).
+
+    Use `pglock.advisory(xact=True)` for transaction-level advisory locks. Both context manager and functional invocations are supported.
+
+#### Changes
+
+- Django 5.1 support, drop Django 3.2 support by [@wesleykendall](https://github.com/wesleykendall) in [#12](https://github.com/Opus10/django-pglock/pull/12).
+
 ## 1.5.1 (2024-04-06)
 
 #### Trivial
