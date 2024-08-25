@@ -245,7 +245,7 @@ def test_advisory_timeout(reraise):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_advisory_transaction(reraise):
+def test_advisory_inside_transaction(reraise):
     """Test errored transaction behavior for advisory locks"""
     barrier = threading.Barrier(2)
     rand_val = str(random.random())
@@ -282,6 +282,68 @@ def test_advisory_transaction(reraise):
     acquired.start()
     hold_lock.join()
     acquired.join()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_advisory_xact(reraise):
+    """Test basic transactional advisory lock behavior"""
+    barrier = threading.Barrier(2)
+    rand_val = str(random.random())
+
+    @reraise.wrap
+    def assert_lock_not_acquired():
+        barrier.wait(timeout=5)
+
+        with pglock.advisory(rand_val, xact=True, timeout=0) as acquired:
+            assert not acquired
+
+        barrier.wait(timeout=5)
+        barrier.wait(timeout=5)
+
+        with transaction.atomic():
+            assert not pglock.advisory(rand_val, xact=True, timeout=0).acquire()
+
+        barrier.wait(timeout=5)
+
+    @reraise.wrap
+    def assert_lock_acquired():
+        with pglock.advisory(rand_val, xact=True) as acquired:
+            assert acquired
+            barrier.wait(timeout=5)
+            barrier.wait(timeout=5)
+
+        with transaction.atomic():
+            assert pglock.advisory(rand_val, xact=True).acquire()
+            barrier.wait(timeout=5)
+            barrier.wait(timeout=5)
+
+    not_acquired = threading.Thread(target=assert_lock_not_acquired)
+    acquired = threading.Thread(target=assert_lock_acquired)
+    not_acquired.start()
+    acquired.start()
+    not_acquired.join()
+    acquired.join()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_advisory_xact_usage():
+    """Test basic error handling scenarios with pglock.advisory(xact=True)."""
+    lock_id = str(random.random())
+
+    with pytest.raises(RuntimeError, match="Must be in a transaction"):
+        pglock.advisory(lock_id, xact=True).acquire()
+
+    with transaction.atomic():
+        with pytest.raises(RuntimeError, match="cannot run inside a transaction"):
+            with pglock.advisory(lock_id, xact=True):
+                pass
+
+    with transaction.atomic():
+        lock = pglock.advisory(lock_id, xact=True)
+        lock.acquire()
+
+        with pytest.raises(RuntimeError, match="cannot be manually released."):
+            lock.release()
 
 
 def test_advsiory_id():
