@@ -24,7 +24,7 @@ When creating an advisory lock, remember that the lock ID is a global name acros
 
 !!! warning
 
-    [Session-based locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) are used by default. They're manually released when the context manager exits or the database connection is terminated. If connections are pooled (e.g., [pgbouncer](https://www.pgbouncer.org)) and code is killed without raising exceptions (e.g., out-of-memory errors), the lock will continue to be held until the connection is terminated. See [transaction-level locks](#transaction) for an alternative.
+    [Session-based locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) are used by default and released when the context manager exits or the database connection is terminated. If connections are pooled (e.g., [pgbouncer](https://www.pgbouncer.org)) and code is killed without raising exceptions (e.g., out-of-memory errors), locks will be held until the connection is terminated. See [transaction-level locks](#transaction) for an alternative.
 
 ## Configuring Lock Wait Time
 

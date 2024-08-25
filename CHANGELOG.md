@@ -6,7 +6,7 @@
 
 - Support transaction-level locks by [@wesleykendall](https://github.com/wesleykendall) in [#13](https://github.com/Opus10/django-pglock/pull/13).
 
-  Use `pglock.advisory(xact=True)` for transaction-level advisory locks. Both context manager and functional invocations are supported.
+    Use `pglock.advisory(xact=True)` for transaction-level advisory locks. Both context manager and functional invocations are supported.
 
 #### Changes
 
