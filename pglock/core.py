@@ -110,11 +110,11 @@ def _is_transaction_errored(cursor):
 
 @contextlib.contextmanager
 def lock_timeout(
-    timeout: Union[dt.timedelta, int, float, None] = _unset,
+    timeout: dt.timedelta | int | float | _Unset | None = _unset,
     *,
     using: str = DEFAULT_DB_ALIAS,
     **timedelta_kwargs: int,
-):
+) -> Generator[None]:
     """Set the lock timeout as a decorator or context manager.
 
     A value of `None` will set an infinite lock timeout.
