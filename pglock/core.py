@@ -223,7 +223,7 @@ class advisory(contextlib.ContextDecorator):
             `None`, an infinite timeout will be used. When
             using a timeout, the acquisition status will be returned when running as a context
             manager. Use the `side_effect` argument to change the runtime behavior.
-        side_effect (type[SideEffect] | None): Adjust the runtime behavior when using a timeout.
+        side_effect (type[SideEffect] | SideEffect | None): Adjust the runtime behavior when using a timeout.
             `pglock.Return` will return the acquisition status when using the context manager.
             `pglock.Raise` will raise a `django.db.utils.OperationalError` if the lock cannot
             be acquired or a timeout happens. `pglock.Skip` will skip decoratored code if the
@@ -246,7 +246,7 @@ class advisory(contextlib.ContextDecorator):
         xact: bool = False,
         using: str = DEFAULT_DB_ALIAS,
         timeout: float | dt.timedelta | _Unset | None = _unset,
-        side_effect: type[SideEffect] | None = None,
+        side_effect: type[SideEffect] | SideEffect | None = None,
     ) -> None:
         """Acquire an advisory lock"""
         self.lock_id = lock_id
@@ -407,7 +407,7 @@ def model(
     mode: str = ACCESS_EXCLUSIVE,
     using: str = DEFAULT_DB_ALIAS,
     timeout: int | float | dt.timedelta | _Unset | None = _unset,
-    side_effect: type[SideEffect] = Return,
+    side_effect: type[SideEffect] | SideEffect = Return,
 ) -> bool:
     """Lock model(s).
 
@@ -566,7 +566,7 @@ def prioritize(
     periodic: bool = True,
     using: str = DEFAULT_DB_ALIAS,
     timeout: dt.timedelta | int | float | _Unset | None = _unset,
-    side_effect: type[PrioritizeSideEffect] = Terminate,
+    side_effect: type[PrioritizeSideEffect] | PrioritizeSideEffect = Terminate,
 ) -> Generator[None]:
     """Kill any blocking locks.
 
