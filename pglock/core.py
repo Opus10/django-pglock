@@ -7,7 +7,6 @@ import hashlib
 import inspect
 import threading
 from collections.abc import Callable, Generator
-from types import TracebackType
 from typing import TYPE_CHECKING, Any, Final, Tuple, TypeVar, Union
 
 import pgactivity
@@ -19,6 +18,8 @@ from typing_extensions import ParamSpec
 from pglock import utils
 
 if TYPE_CHECKING:
+    from types import TracebackType
+
     from pglock.models import BlockedPGLockQuerySet
 
 
