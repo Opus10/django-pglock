@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 (2024-09-07)
+
+#### Trivial
+
+  - Improve type-checking for public interface by [@max-muoto](https://github.com/max-muoto) in [#14](https://github.com/Opus10/django-pglock/pull/14/)
+
 ## 1.6.0 (2024-08-24)
 
 #### Features
