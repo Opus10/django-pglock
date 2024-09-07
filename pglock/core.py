@@ -1,17 +1,26 @@
+from __future__ import annotations
+
 import contextlib
 import datetime as dt
 import functools
 import hashlib
 import inspect
 import threading
-from typing import Tuple, Union
+from collections.abc import Callable, Generator
+from types import TracebackType
+from typing import TYPE_CHECKING, Any, Final, Tuple, TypeVar, Union
 
 import pgactivity
 from django.apps import apps
 from django.db import DEFAULT_DB_ALIAS, connections, models, transaction
 from django.db.utils import OperationalError
+from typing_extensions import ParamSpec
 
 from pglock import utils
+
+if TYPE_CHECKING:
+    from pglock.models import BlockedPGLockQuerySet
+
 
 if utils.psycopg_maj_version == 2:
     import psycopg2.extensions
@@ -21,19 +30,27 @@ else:
     raise AssertionError
 
 
+_R = TypeVar("_R")
+_P = ParamSpec("_P")
+
 # Lock levels
-ACCESS_SHARE = "ACCESS SHARE"
-ROW_SHARE = "ROW SHARE"
-ROW_EXCLUSIVE = "ROW EXCLUSIVE"
-SHARE_UPDATE_EXCLUSIVE = "SHARE UPDATE EXCLUSIVE"
-SHARE = "SHARE"
-SHARE_ROW_EXCLUSIVE = "SHARE ROW EXCLUSIVE"
-EXCLUSIVE = "EXCLUSIVE"
-ACCESS_EXCLUSIVE = "ACCESS EXCLUSIVE"
+ACCESS_SHARE: Final = "ACCESS SHARE"
+ROW_SHARE: Final = "ROW SHARE"
+ROW_EXCLUSIVE: Final = "ROW EXCLUSIVE"
+SHARE_UPDATE_EXCLUSIVE: Final = "SHARE UPDATE EXCLUSIVE"
+SHARE: Final = "SHARE"
+SHARE_ROW_EXCLUSIVE: Final = "SHARE ROW EXCLUSIVE"
+EXCLUSIVE: Final = "EXCLUSIVE"
+ACCESS_EXCLUSIVE: Final = "ACCESS EXCLUSIVE"
 
 
 _timeout = threading.local()
-_unset = object()
+
+
+class _Unset: ...
+
+
+_unset = _Unset()
 
 
 class SideEffect:
@@ -205,7 +222,7 @@ class advisory(contextlib.ContextDecorator):
             `None`, an infinite timeout will be used. When
             using a timeout, the acquisition status will be returned when running as a context
             manager. Use the `side_effect` argument to change the runtime behavior.
-        side_effect (str): Adjust the runtime behavior when using a timeout.
+        side_effect (type[SideEffect] | None): Adjust the runtime behavior when using a timeout.
             `pglock.Return` will return the acquisition status when using the context manager.
             `pglock.Raise` will raise a `django.db.utils.OperationalError` if the lock cannot
             be acquired or a timeout happens. `pglock.Skip` will skip decoratored code if the
@@ -222,14 +239,14 @@ class advisory(contextlib.ContextDecorator):
 
     def __init__(
         self,
-        lock_id=None,
+        lock_id: int | str | None = None,
         *,
-        shared=False,
-        xact=False,
-        using=DEFAULT_DB_ALIAS,
-        timeout=_unset,
-        side_effect=None,
-    ):
+        shared: bool = False,
+        xact: bool = False,
+        using: str = DEFAULT_DB_ALIAS,
+        timeout: float | dt.timedelta | _Unset | None = _unset,
+        side_effect: type[SideEffect] | None = None,
+    ) -> None:
         """Acquire an advisory lock"""
         self.lock_id = lock_id
         self.using = using
@@ -245,24 +262,24 @@ class advisory(contextlib.ContextDecorator):
         self._func = None
 
     @property
-    def int_lock_id(self):
+    def int_lock_id(self) -> int:
         return _cast_lock_id(self.lock_id)
 
     def in_transaction(self) -> bool:
         return connections[self.using].in_atomic_block
 
-    def __call__(self, func):
+    def __call__(self, func: Callable[_P, _R]) -> Callable[_P, _R | None]:  # type: ignore[override]
         self._func = func
 
         @functools.wraps(func)
-        def inner(*args, **kwargs):
+        def inner(*args: _P.args, **kwargs: _P.kwargs) -> _R | None:
             with self._recreate_cm():
                 if self._acquired or self.side_effect != Skip:
                     return func(*args, **kwargs)
 
         return inner
 
-    def _process_runtime_parameters(self):
+    def _process_runtime_parameters(self) -> None:
         """
         Instantiate parameters such as the lock ID and side effect after
         we know if we are running as a context manager or decorator
@@ -345,7 +362,7 @@ class advisory(contextlib.ContextDecorator):
             release_sql = f'pg_advisory_unlock{"_shared" if self.shared else ""}'
             cursor.execute(f"SELECT {release_sql}({self.int_lock_id})")
 
-    def __enter__(self):
+    def __enter__(self) -> bool:
         self._transaction_ctx = contextlib.ExitStack()
         if self.xact:
             if self.in_transaction():
@@ -371,7 +388,12 @@ class advisory(contextlib.ContextDecorator):
 
         return self._acquired
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self._savepoint_ctx.__exit__(exc_type, exc_value, traceback)
         self._transaction_ctx.__exit__(exc_type, exc_value, traceback)
 
@@ -380,11 +402,11 @@ class advisory(contextlib.ContextDecorator):
 
 
 def model(
-    *models: Union[str, models.Model],
+    *models: str | type[models.Model] | models.Model,
     mode: str = ACCESS_EXCLUSIVE,
     using: str = DEFAULT_DB_ALIAS,
-    timeout: Union[int, float, dt.timedelta, None] = _unset,
-    side_effect: SideEffect = Return,
+    timeout: int | float | dt.timedelta | _Unset | None = _unset,
+    side_effect: type[SideEffect] = Return,
 ) -> bool:
     """Lock model(s).
 
@@ -464,7 +486,7 @@ def _prioritize_bg_task(backend_pid, side_effect):
 
 
 class _PeriodicTimer(threading.Timer):
-    def run(self):
+    def run(self) -> None:
         self.exc = None
         try:
             while not self.finished.wait(self.interval):
@@ -472,7 +494,7 @@ class _PeriodicTimer(threading.Timer):
         except BaseException as e:
             self.exc = e
 
-    def cancel(self):
+    def cancel(self) -> None:
         super().cancel()
 
         if self.exc:
@@ -494,13 +516,13 @@ class PrioritizeSideEffect(SideEffect):
     [pglock.models.BlockedPGLock][] queryset.
     """
 
-    def __init__(self, **filters):
+    def __init__(self, **filters: Any) -> None:
         self.filters = filters
 
-    def worker(self, blocked_locks):
+    def worker(self, blocked_locks: BlockedPGLockQuerySet) -> list[int]:
         raise NotImplementedError
 
-    def __call__(self, blocked_locks):
+    def __call__(self, blocked_locks: BlockedPGLockQuerySet) -> list[int]:
         return self.worker(blocked_locks.filter(**self.filters))
 
 
@@ -532,19 +554,19 @@ class Cancel(PrioritizeSideEffect):  # pragma: no cover
     duration.
     """
 
-    def worker(self, blocked_locks):
+    def worker(self, blocked_locks: BlockedPGLockQuerySet) -> list[int]:
         return blocked_locks.cancel_blocking_activity()
 
 
 @contextlib.contextmanager
 def prioritize(
     *,
-    interval: Union[int, float, dt.timedelta] = 1,
+    interval: int | float | dt.timedelta = 1,
     periodic: bool = True,
     using: str = DEFAULT_DB_ALIAS,
-    timeout: Union[dt.timedelta, int, float, None] = _unset,
-    side_effect: PrioritizeSideEffect = Terminate,
-) -> None:
+    timeout: dt.timedelta | int | float | _Unset | None = _unset,
+    side_effect: type[PrioritizeSideEffect] = Terminate,
+) -> Generator[None]:
     """Kill any blocking locks.
 
     `pglock.prioritize` has a periodic background worker thread that checks for blocking activity
