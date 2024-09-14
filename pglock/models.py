@@ -5,18 +5,19 @@ import pgactivity.models
 from django.apps import apps
 from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS, models
+from typing_extensions import Self
 
 from pglock import config, utils
 
 
 class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
-    def get_pid_clause(self):
+    def get_pid_clause(self) -> str:
         if isinstance(self.query.pids, str):
             return f"AND pid = ANY({self.query.pids})"
         else:
             return super().get_pid_clause()
 
-    def get_ctes(self):
+    def get_ctes(self) -> List[str]:
         ctes = super().get_ctes()
 
         if self.query.relations:
@@ -94,16 +95,16 @@ class PGTableQueryCompiler(pgactivity.models.PGTableQueryCompiler):
 
 
 class PGTableQuery(pgactivity.models.PGTableQuery):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.relations = None
 
-    def get_compiler(self, *args, **kwargs):
+    def get_compiler(self, *args: Any, **kwargs: Any) -> PGTableQueryCompiler:
         compiler = super().get_compiler(*args, **kwargs)
         compiler.__class__ = PGTableQueryCompiler
         return compiler
 
-    def __chain(self, *args, **kwargs):
+    def __chain(self, *args: Any, **kwargs: Any) -> Self:
         clone = super().__chain(*args, **kwargs)
         clone.relations = self.relations
         return clone
@@ -120,7 +121,7 @@ class PGTableQuerySet(pgactivity.models.PGTableQuerySet):
 class PGLockQuerySet(PGTableQuerySet):
     """The Queryset for the `PGLock` model."""
 
-    def on(self, *relations: Union[models.Model, str]) -> models.QuerySet:
+    def on(self, *relations: Union[models.Model, str]) -> Self:
         """Set the relations to filter against.
 
         Currently model names or classes are accepted.
@@ -139,7 +140,7 @@ class PGLockQuerySet(PGTableQuerySet):
         pids = list(self.values_list("activity_id", flat=True).distinct())
         return pgactivity.terminate(*pids, using=self.db)
 
-    def config(self, name: str, **overrides: Any) -> models.QuerySet:
+    def config(self, name: str, **overrides: Any) -> Self:
         """
         Use a config name from `settings.PGLOCK_CONFIGS` to apply filters.
         Config overrides can be provided in the keyword arguments.
@@ -218,17 +219,17 @@ class PGLock(BasePGLock):
 class BlockedPGLockQuerySet(PGLockQuerySet):
     """The Queryset for the `BlockedPGLock` model. Inherits `PGLockQuerySet`"""
 
-    def cancel_blocking_activity(self):
+    def cancel_blocking_activity(self) -> List[int]:
         """Cancel all PIDs in the `blocking_activity` field of the filtered queryset"""
         pids = list(self.values_list("blocking_activity_id", flat=True).distinct())
         return pgactivity.cancel(*pids, using=self.db)
 
-    def terminate_blocking_activity(self):
+    def terminate_blocking_activity(self) -> List[int]:
         """Terminate all PIDs in the `blocking_activity` field of the filtered queryset"""
         pids = list(self.values_list("blocking_activity_id", flat=True).distinct())
         return pgactivity.terminate(*pids, using=self.db)
 
-    def pid(self, *pids):
+    def pid(self, *pids: int) -> Self:
         qs = self._clone()
 
         if pids:
